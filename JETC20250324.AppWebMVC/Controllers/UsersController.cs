@@ -8,9 +8,14 @@ using Microsoft.EntityFrameworkCore;
 using JETC20250324.AppWebMVC.Models;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace JETC20250324.AppWebMVC.Controllers
 {
+    [Authorize(Roles = "ADMINISTRADOR")]
     public class UsersController : Controller
     {
         private readonly Test20250324DbContext _context;
@@ -65,6 +70,47 @@ namespace JETC20250324.AppWebMVC.Controllers
                 return RedirectToAction(nameof(Index));
             }
             return View(user);
+        }
+
+        [AllowAnonymous]
+        public async Task<IActionResult> CerrarSession()
+        {
+            // Hola mundo
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction("Index", "Home");
+        }
+
+        [AllowAnonymous]
+        public IActionResult Login()
+        {
+            return View();
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        public async Task<IActionResult> Login(User usuario)
+        {
+            usuario.Password = CalcularHashMD5(usuario.Password);
+            var usuarioAuth = await _context.
+                Users.
+                FirstOrDefaultAsync(s => s.Email == usuario.Email && s.Password == usuario.Password);
+            if (usuarioAuth != null && usuarioAuth.Id > 0 && usuarioAuth.Email == usuario.Email)
+            {
+                var claims = new[] {
+                    new Claim(ClaimTypes.Name, usuarioAuth.Email),
+                    new Claim("Id", usuarioAuth.Id.ToString()),
+                     new Claim("Username", usuarioAuth.Username),
+                    new Claim(ClaimTypes.Role, usuarioAuth.Role)
+                    };
+                var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+                return RedirectToAction("Index", "Home");
+            }
+            else
+            {
+                ModelState.AddModelError("", "El email o contraseña estan incorrectos");
+                return View();
+            }
         }
 
         // GET: Users/Edit/5
